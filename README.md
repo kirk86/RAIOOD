@@ -1,2 +1,2 @@
 # RAIOOD
-On the Importance of Regularisation and Auxiliary Information in OOD Detection
+On the Importance of **R**egularisation and **A**uxiliary **I**nformation in **OOD** Detection
