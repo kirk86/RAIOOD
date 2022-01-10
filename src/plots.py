@@ -1,16 +1,15 @@
 import torch
-import metrics
 import numpy as np
 import matplotlib.pyplot as plt
-# from metrics import dirichlet_uncertainty
+from src import metrics
 
 nn = torch.nn
 F = torch.nn.functional
 
-def plot_x(x, ax=None):
+def plot_x(x, ax=None, labels=None):
     if ax is None:
-        return plt.scatter(x[:, 0], x[:, 1])
-    return ax.scatter(x[:, 0], x[:, 1])
+        return plt.scatter(x[:, 0], x[:, 1], c=labels)
+    return ax.scatter(x[:, 0], x[:, 1], c=labels)
 
 
 def plot_entropys(ent, points):
@@ -24,18 +23,24 @@ def plot_data(*args, ax=None):
     for arg in args:
         plot_x(arg, ax)
 
+def plot_train_stats(epochs, losses, accuracies):
+    plt.plot(range(epochs), losses, label='loss')
+    plt.plot(range(epochs), accuracies, label='acc')
+    plt.title("Loss vs Accuracy on Train")
+    plt.legend()
+    plt.grid()
 
-def plot_train(train, ytrain, ax):
-    x1_ind = np.where(ytrain == 0)[0]
-    x1 = train[x1_ind]
+# def plot_train(train, ytrain, ax):
+#     x1_ind = np.where(ytrain == 0)[0]
+#     x1 = train[x1_ind]
 
-    x2_ind = np.where(ytrain == 1)[0]
-    x2 = train[x2_ind]
+#     x2_ind = np.where(ytrain == 1)[0]
+#     x2 = train[x2_ind]
 
-    x3_ind = np.where(ytrain == 2)[0]
-    x3 = train[x3_ind]
+#     x3_ind = np.where(ytrain == 2)[0]
+#     x3 = train[x3_ind]
 
-    plot_data(x1, x2, x3, ax=ax)
+#     plot_data(x1, x2, x3, ax=ax)
 
 
 def plot_prediction_uncertainty(net, points):
@@ -87,18 +92,18 @@ def plot_contour(X, Y, x, y, z, title, ax=None, fig=None):
 def plot_net(logits, X, y, xx, yy, axs, fig, sigma, a0=None, method=None):
 
     if a0 is not None:
-        conf_title = 'Conf./Max Prob. $\\alpha={}$'.format(a0)
+        conf_title = 'Confidence $\\alpha={}$'.format(a0)
         ent_title = 'Entropy $\\alpha={}$'.format(a0)
         mutual_info_title = 'Mutual Information $\\alpha={}$'.format(a0)
         diff_ent_title = 'Differential Entropy $\\alpha={}$'.format(a0)
         epkl_title = 'EPKL $\\alpha={}$'.format(a0)
 
     else:
-        conf_title = 'Conf./Max Prob. $\\sigma={}$'.format(sigma)
-        ent_title = 'Entropy $\sigma={}$'.format(sigma)
-        mutual_info_title = 'Mutual Information $\\sigma={}$'.format(sigma)
-        diff_ent_title = 'Diff. Entropy $\sigma={}$'.format(sigma)
-        epkl_title = 'EPKL $\sigma={}$'.format(sigma)
+        conf_title = 'Confidence'
+        ent_title = 'Entropy'
+        mutual_info_title = 'Mutual Information'
+        diff_ent_title = 'Diff. Entropy'
+        epkl_title = 'EPKL'
 
     if axs[0] is not None:
 #         plot_train(X, y.squeeze(), axs[0])

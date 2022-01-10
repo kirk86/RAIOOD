@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from tqdm.autonotebook import tqdm
-from augmentations import polar_transform, create_patches
+#from augmentations import polar_transform, create_patches
 
 nn = torch.nn
 F = torch.nn.functional
@@ -153,8 +153,10 @@ def gmm_sample(n_samples, components, mu, sigma=0.5, d=2):
 
 
 def create_meshgrid(data):
-    x_range = (data[:, 0].min() - 1, data[:, 0].max() + 1)
-    y_range = (data[:, 1].min() - 1, data[:, 1].max() + 1)
+    x_range = (data[:, 0].min() - 5, data[:, 0].max() + 10)
+    y_range = (data[:, 1].min() - 2, data[:, 1].max() + 10)
+    # x_range = (-5, 10)
+    # y_range = (-2, 10)
 
     x = np.arange(x_range[0], x_range[1], 0.1)
     y = np.arange(y_range[0], y_range[1], 0.1)
@@ -168,7 +170,7 @@ def draw_loss(model, X, y, epsilon=0.1, device="cuda:0"):
     y should be just an entry from the corresponding batch, e.g. y.shape = (1,)
     """
     Xi, Yi = np.meshgrid(np.linspace(-epsilon, epsilon, 50), np.linspace(-epsilon, epsilon, 50))
-    
+
     def grad_at_delta(delta):
         delta.requires_grad_(True)
         nn.CrossEntropyLoss()(model(X + delta), y).backward()
@@ -180,7 +182,7 @@ def draw_loss(model, X, y, epsilon=0.1, device="cuda:0"):
     dir2 = grad_at_delta(delta2)
     np.random.seed(0)
     dir2 = np.sign(np.random.randn(dir1.shape[0]))
-    
+
     all_deltas = torch.tensor((np.array([Xi.flatten(), Yi.flatten()]).T @ 
                               np.array([dir2, dir1])).astype(np.float32)).to(device)
     data = all_deltas.view(-1, 3, 32, 32) + X
@@ -196,7 +198,7 @@ def draw_loss(model, X, y, epsilon=0.1, device="cuda:0"):
 #     Zi = nn.CrossEntropyLoss(reduction="none")(yp, y.repeat(yp.shape[0])).cpu().numpy()
     Zi = Zi.reshape(*Xi.shape)
     #Zi = (Zi-Zi.min())/(Zi.max() - Zi.min())
-    
+
     return Xi, Yi, Zi
 
 
@@ -218,7 +220,7 @@ def swa_schedule(epoch, lr_init=0.05, epochs=300):
 
 
 def jacobian(outputs, inputs, create_graph=False):
-    jac = []                                                                                          
+    jac = []
     flat_outputs = outputs.reshape(-1)
     grad_outputs = torch.zeros_like(flat_outputs)
     for i in range(len(flat_outputs)):
@@ -284,10 +286,10 @@ def train(model, opt, data_loader, criterion, device, scheduler=None, polar=None
         opt.step()
         if scheduler is not None:
             scheduler.step()
-    
+
     avg_loss = error / n_samples
     avg_acc = correct / n_samples
-        
+
     return avg_loss, avg_acc
 
 
@@ -320,14 +322,14 @@ def test(model, data_loader, criterion, device, ood=False, polar=None, patches=F
                 logits = logits[0]
             loss = criterion(logits, y)  # sum up batch loss
             loss = torch.nan_to_num(loss, nan=0.0, posinf=0.0, neginf=0.0)
-            
+
             y_hat = F.softmax(logits, dim=1).argmax(dim=1) # get the index of the max log-probability
             correct += y.eq(y_hat.view_as(y)).sum().item()
             error += batch_size * loss.item()
             n_samples += batch_size
-            
+
             collect_logits.append(logits)
-            
+
              # compute the margin
             probs = F.softmax(logits, dim=1)
             probs_clone = probs.clone()
@@ -339,10 +341,10 @@ def test(model, data_loader, criterion, device, ood=False, polar=None, patches=F
 
         te_margin = np.percentile(margin.cpu().numpy(), 5)
         te_margin = np.nan_to_num(te_margin, nan=0.0, posinf=0.0, neginf=0.0)
-        
+
     avg_loss = error / n_samples
     avg_acc = correct / n_samples
-    
+
     return avg_loss, avg_acc, te_margin, collect_logits
 
 
@@ -439,7 +441,7 @@ def enable_dropout(m):
         m.train()
 
 
-def average_predictions(model, X, y, num_classes=3, num_models=30):
+def average_predictions(model, X, y, n_classes=3, n_models=30):
 #     predictions = np.zeros((len(X), num_classes))
     logits = np.zeros((len(X), num_classes))
     targets = np.zeros(len(X))
@@ -453,7 +455,7 @@ def average_predictions(model, X, y, num_classes=3, num_models=30):
 #         k = 0
 #         for x, target in zip(X, y):
 #             torch.manual_seed(i)
-            
+
 # #             output = model(input)
 #             outputs = model(x)
 
@@ -479,5 +481,3 @@ def average_predictions(model, X, y, num_classes=3, num_models=30):
 #     entropies = -np.sum(np.log(predictions + eps) * predictions, axis=1)
 #     np.savez(args.save_path, entropies=entropies, predictions=predictions, targets=targets)
     return logits
-    
-    

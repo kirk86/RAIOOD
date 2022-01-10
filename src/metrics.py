@@ -1,9 +1,9 @@
 import torch
-import utils
 import numpy as np
 from scipy.special import digamma, gammaln, psi
 from scipy.stats import dirichlet
 from scipy.stats import entropy
+from src import utils
 
 
 def accuracy(mean, y_train):

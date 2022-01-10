@@ -1,5 +1,5 @@
 import torch
-from .layers.sparsify import Sparsify1D_kactive
+#from .layers.sparsify import Sparsify1D_kactive
 nn = torch.nn
 F = torch.nn.functional
 
