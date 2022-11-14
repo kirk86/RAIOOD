@@ -15,9 +15,9 @@ class MLP(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
 
     def forward(self, x):
-        x = F.leaky_relu(self.fc1(x))
+        x = F.relu(self.fc1(x))
         x = self.dropout(x)
-        x = F.leaky_relu(self.fc2(x))
+        x = F.relu(self.fc2(x))
         # x = F.gelu(self.fc1(x))
         # x = self.top_k(self.fc2(x))
         x = F.max_pool1d(x.unsqueeze(dim=0), kernel_size=2).squeeze()

@@ -1,4 +1,6 @@
+import os
 import torch
+import random
 import numpy as np
 from tqdm.autonotebook import tqdm
 #from augmentations import polar_transform, create_patches
@@ -29,10 +31,16 @@ def to_torch(points):
     return points_torch
 
 
+def set_seed(seed):
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 def generate_ood_multiclass(N, sigma, use_torch=False):
-#     mu1 = np.array([0, 4/3])*3
-#     mu2 = np.array([2, 4/3])*3
-#     mu3 = np.array([1, -np.sqrt(3)])*3
     mu4 = np.array([-2/3, 1])*4
     mu5 = np.array([1, 1])*2
     mu6 = np.array([2, 1])*4
@@ -41,9 +49,6 @@ def generate_ood_multiclass(N, sigma, use_torch=False):
     def cov(_alpha): return np.array([[1, 0], [0, 1]]) * _alpha
 
     alpha = sigma
-#     alpha1 = cov(alpha)
-#     alpha2 = cov(alpha)
-#     alpha3 = cov(alpha)
     alpha4 = cov(alpha)
     alpha5 = cov(alpha)
     alpha6 = cov(alpha) # np.array([[3, -2], [-2, 3]])
@@ -53,31 +58,16 @@ def generate_ood_multiclass(N, sigma, use_torch=False):
         return np.random.multivariate_normal(
             mu, alpha, size=N)
 
-#     x1 = gen_normal(mu1, alpha1)
-#     x2 = gen_normal(mu2, alpha2)
-#     x3 = gen_normal(mu3, alpha3)
     x4 = gen_normal(mu4, alpha4)
     x5 = gen_normal(mu5, alpha5)
     x6 = gen_normal(mu6, alpha6)
     x7 = gen_normal(mu7, alpha7)
 
-#     y1 = np.zeros((N, 1))
-#     y2 = np.ones((N, 1))
-#     y3 = np.ones((N, 1))*2
     y4 = np.ones((N, 1))*3
     y5 = np.ones((N, 1))*4
     y6 = np.ones((N, 1))*5
     y7 = np.ones((N, 1))*6
 
-#     x1 = np.concatenate((x1, y1), axis=1)
-#     x2 = np.concatenate((x2, y2), axis=1)
-#     x3 = np.concatenate((x3, y3), axis=1)
-#     x4 = np.concatenate((x4, y4), axis=1)
-#     x5 = np.concatenate((x5, y5), axis=1)
-#     x6 = np.concatenate((x6, y6), axis=1)
-#     x7 = np.concatenate((x7, y7), axis=1)
-
-#     X = np.vstack((x1, x2, x3, x4, x5, x6, x7))
 #     np.random.shuffle(X)
     X_ood = np.vstack((x4, x5, x6, x7))
     np.random.shuffle(X_ood)
@@ -155,8 +145,6 @@ def gmm_sample(n_samples, components, mu, sigma=0.5, d=2):
 def create_meshgrid(data):
     x_range = (data[:, 0].min() - 5, data[:, 0].max() + 10)
     y_range = (data[:, 1].min() - 2, data[:, 1].max() + 10)
-    # x_range = (-5, 10)
-    # y_range = (-2, 10)
 
     x = np.arange(x_range[0], x_range[1], 0.1)
     y = np.arange(y_range[0], y_range[1], 0.1)
@@ -186,18 +174,10 @@ def draw_loss(model, X, y, epsilon=0.1, device="cuda:0"):
     all_deltas = torch.tensor((np.array([Xi.flatten(), Yi.flatten()]).T @ 
                               np.array([dir2, dir1])).astype(np.float32)).to(device)
     data = all_deltas.view(-1, 3, 32, 32) + X
-#     model.eval()
     with torch.no_grad():
         yp = model(data)
-#     predictions = []
-#     with torch.no_grad():
-#         for xx in data:
-#             predictions.append(model(xx.view(1, 3, 32, 32)).view(1, -1))
-#     yp = torch.stack(predictions, dim=0).squeeze()
         Zi = nn.CrossEntropyLoss(reduction="none")(yp, y.repeat(yp.shape[0])).detach().cpu().numpy()
-#     Zi = nn.CrossEntropyLoss(reduction="none")(yp, y.repeat(yp.shape[0])).cpu().numpy()
     Zi = Zi.reshape(*Xi.shape)
-    #Zi = (Zi-Zi.min())/(Zi.max() - Zi.min())
 
     return Xi, Yi, Zi
 
@@ -205,9 +185,6 @@ def draw_loss(model, X, y, epsilon=0.1, device="cuda:0"):
 def swa_schedule(epoch, lr_init=0.05, epochs=300):
     # adapted from https://github.com/wjmaddox/swa_gaussian/swag/run_swag.py
     t = epoch / epochs
-    # t = (epoch) / (args.swa_start if args.swa else args.epochs)
-    # lr_ratio = args.swa_lr / args.lr_init if args.swa else 0.01
-    # lr_ratio = 0.02 / 0.01
     lr_ratio = 0.01
     if t <= 0.5:
         factor = 1.0
@@ -215,7 +192,6 @@ def swa_schedule(epoch, lr_init=0.05, epochs=300):
         factor = 1.0 - (1.0 - lr_ratio) * (t - 0.5) / 0.4
     else:
         factor = lr_ratio
-    # return args.lr_init * factor
     return lr_init * factor
 
 
@@ -402,12 +378,6 @@ def seed_worker(worker_id):
     numpy.random.seed(worker_seed)
     random.seed(worker_seed)
 
-# DataLoader(
-#     train_dataset,
-#     batch_size=batch_size,
-#     num_workers=num_workers,
-#     worker_init_fn=seed_worker
-# )
 
 def softmax(x):
     e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
@@ -443,41 +413,21 @@ def enable_dropout(m):
 
 def average_predictions(model, X, y, n_classes=3, n_models=30):
 #     predictions = np.zeros((len(X), num_classes))
-    logits = np.zeros((len(X), num_classes))
-    targets = np.zeros(len(X))
-#     print(targets.size)
+    logits = torch.zeros((len(X), n_classes))
 
-    for i in range(num_models):
-        print("%d/%d" % (i + 1, num_models))
+    for i in range(n_models):
+        # print("%d/%d" % (i + 1, n_models))
         model.eval()
         model.apply(enable_dropout)
 
-#         k = 0
-#         for x, target in zip(X, y):
-#             torch.manual_seed(i)
-
-# #             output = model(input)
-#             outputs = model(x)
-
-#             with torch.no_grad():
-# #                 predictions[k : k + input.size()[0]] += (
-# #                     F.softmax(output, dim=1).cpu().numpy()
-# #                 )
-#                 logits[k : k + x.size()[0]] += outputs.cpu().numpy()
-# #             targets[k : (k + target.size(0))] = target.numpy()
-#             k += x.size()[0]
-
-#         full batch
         torch.manual_seed(i)
         with torch.no_grad():
             outputs = model(X)
-            logits += outputs.cpu().numpy()
+            logits += outputs
 
-        print("Accuracy:", np.mean(np.argmax(logits, axis=1) == targets))
+        # print(logits.shape, y.shape, logits.argmax(dim=1).shape)
+        # print("Accuracy:", torch.mean(logits.argmax(dim=1) == y))
 
-#     predictions /= num_models
-    logits /= num_models
+    logits /= n_models
 
-#     entropies = -np.sum(np.log(predictions + eps) * predictions, axis=1)
-#     np.savez(args.save_path, entropies=entropies, predictions=predictions, targets=targets)
     return logits

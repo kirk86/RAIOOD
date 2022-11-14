@@ -30,18 +30,6 @@ def plot_train_stats(epochs, losses, accuracies):
     plt.legend()
     plt.grid()
 
-# def plot_train(train, ytrain, ax):
-#     x1_ind = np.where(ytrain == 0)[0]
-#     x1 = train[x1_ind]
-
-#     x2_ind = np.where(ytrain == 1)[0]
-#     x2 = train[x2_ind]
-
-#     x3_ind = np.where(ytrain == 2)[0]
-#     x3 = train[x3_ind]
-
-#     plot_data(x1, x2, x3, ax=ax)
-
 
 def plot_prediction_uncertainty(net, points):
     points_torch = torch.from_numpy(points).float()
