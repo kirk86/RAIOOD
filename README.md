@@ -1,4 +1,4 @@
-### On the Importance of _R_ egularisation and _A_ uxiliary _I_ nformation in _OOD_ Detection (RAIOOD)
+## On the Importance of _R_ egularisation and _A_ uxiliary _I_ nformation in _OOD_ Detection (RAIOOD)
 
 - Datasets
 
