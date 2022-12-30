@@ -113,7 +113,8 @@ def plot_net(logits, X, y, xx, yy, axs, fig, sigma, a0=None, method=None):
 def plot_loss(Xi, Yi, Zi):
     from matplotlib.colors import LightSource
     fig = plt.figure(figsize=(5,5))
-    ax = fig.gca(projection='3d')
+    # ax = fig.gca(projection='3d')
+    ax = fig.add_subplot(projection='3d')
     ls = LightSource(azdeg=0, altdeg=200)
     rgb = ls.shade(Zi, plt.cm.coolwarm)
 

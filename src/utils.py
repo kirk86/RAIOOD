@@ -1,9 +1,8 @@
 import os
 import torch
 import random
+import itertools
 import numpy as np
-from tqdm.autonotebook import tqdm
-#from augmentations import polar_transform, create_patches
 
 nn = torch.nn
 F = torch.nn.functional
@@ -235,25 +234,55 @@ def ntk(model, inp):
     return features, tk
 
 
-def train(model, opt, data_loader, criterion, device, scheduler=None, polar=None, patches=False, transforms=None):
-    n_samples, error, correct = 0.0, 0.0, 0.0
-    model.train()
-    for x, y in data_loader:
-        if polar:
-            x = polar_transform(x, transform_type='logpolar')
-        if patches:
-            max_patches = 10
-            x = create_patches(x, size=(24, 24), max_patches=10, transforms=transforms)
-            x, y = x.to(device), torch.cat([y] * max_patches, dim=0).to(device)
-        else:
-            x, y = x.to(device), y.to(device)
-        batch_size = len(x)
-        logits = model(x)
-        loss = criterion(logits, y)
+# def train(model, opt, data_loader, criterion, device, scheduler=None):
+#     n_samples, error, correct = 0.0, 0.0, 0.0
+#     model.train()
+#     for x, y in data_loader:
+#         x, y = x.to(device), y.to(device)
+#         batch_size = len(x)
+#         logits = model(x)
+#         loss = criterion(logits, y)
 
-        y_hat = F.softmax(logits, dim=1).argmax(dim=1)
+#         y_hat = F.softmax(logits, dim=1).argmax(dim=1)
+#         correct += y.eq(y_hat.view_as(y)).sum().item()
+#         error += batch_size * loss.item()
+#         n_samples += batch_size
+
+#         opt.zero_grad()
+#         loss.backward()
+#         torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
+#         opt.step()
+#         if scheduler is not None:
+#             scheduler.step()
+
+#     avg_loss = error / n_samples
+#     avg_acc = correct / n_samples
+
+#     return avg_loss, avg_acc
+
+
+def train(model, opt, data_loader, criterion, device, scheduler=None):
+    n_samples, error, correct, cosine_error = 0.0, 0.0, 0.0, 0.0
+    zero = torch.tensor([0.0]).to(device)
+    one = torch.tensor([1.0]).to(device)
+    model.train()
+    loader = zip(*data_loader) if isinstance(data_loader, tuple) else data_loader
+    for samples in loader:
+        if isinstance(samples, tuple) and isinstance(samples[0], list):
+            x, y, x_ood, y_ood = map(lambda var: var.to(device), list(itertools.chain(*samples)))
+            inputs = torch.cat([x, x_ood], dim=0)
+        else:
+            x, y = map(lambda var: var.to(device), samples)
+            inputs = x
+
+        batch_size = len(x)
+        logits = model(inputs)
+        loss, y_hat, cosine = criterion(logits, y, batch_size)
+
+        # stats
         correct += y.eq(y_hat.view_as(y)).sum().item()
         error += batch_size * loss.item()
+        cosine_error += batch_size * cosine.item()
         n_samples += batch_size
 
         opt.zero_grad()
@@ -266,40 +295,33 @@ def train(model, opt, data_loader, criterion, device, scheduler=None, polar=None
     avg_loss = error / n_samples
     avg_acc = correct / n_samples
 
-    return avg_loss, avg_acc
+    return avg_loss, avg_acc, cosine_error/n_samples
 
 
-def test(model, data_loader, criterion, device, ood=False, polar=None, patches=False, transforms=None, flag_eval=True):
+def test(model, data_loader, criterion, device, num_classes=10, flag_eval=True):
     n_samples, error, correct = 0.0, 0.0, 0.0
     collect_logits = []
     margin = torch.Tensor([]).to(device)
     if flag_eval:
         model.eval()
+    loader = zip(*data_loader) if isinstance(data_loader, tuple) else data_loader
     with torch.no_grad():
-        for x, y in data_loader:
-#             if data_loader returns tuple of images, 
-#             the clean image is in position 0
-            x = x[0] if isinstance(x, list) else x
-            y = y[0] if isinstance(y, list) else y
-#             if evaluating on OoD data then scale labels, e.g. [0-99] to [0-9]
-            if ood:
-                y = ((y / 100) * 10).floor().long()
-            if polar:
-                x = polar_transform(x, transform_type='logpolar')
-            if patches:
-                max_patches = 10
-                x = create_patches(x, size=(24, 24), max_patches=10, transforms=transforms)
-                x, y = x.to(device), torch.cat([y] * max_patches, dim=0).to(device)
+        for samples in loader:
+            if isinstance(samples, tuple) and isinstance(samples[0], list):
+                x, y, x_ood, y_ood = map(lambda var: var.to(device), list(itertools.chain(*samples)))
+                inputs = torch.cat([x, x_ood], dim=0)
             else:
-                x, y = x.to(device), y.to(device)
+                x, y = map(lambda var: var.to(device), samples)
+                inputs = x
+
+            if y.max() > num_classes - 1:
+                y = ((y / (y.max() + 1)) * num_classes).floor().long()
+
             batch_size = len(x)
-            logits = model(x)
-            if isinstance(logits, tuple):
-                logits = logits[0]
-            loss = criterion(logits, y)  # sum up batch loss
+            logits = model(inputs)
+            loss, y_hat, _ = criterion(logits, y, batch_size)  # sum up batch loss
             loss = torch.nan_to_num(loss, nan=0.0, posinf=0.0, neginf=0.0)
 
-            y_hat = F.softmax(logits, dim=1).argmax(dim=1) # get the index of the max log-probability
             correct += y.eq(y_hat.view_as(y)).sum().item()
             error += batch_size * loss.item()
             n_samples += batch_size
@@ -307,7 +329,7 @@ def test(model, data_loader, criterion, device, ood=False, polar=None, patches=F
             collect_logits.append(logits)
 
              # compute the margin
-            probs = F.softmax(logits, dim=1)
+            probs = F.softmax(logits[:batch_size], dim=1)
             probs_clone = probs.clone()
             min_prob = probs_clone.min(dim=1)[0]
             probs_clone = probs_clone.scatter_(1, y.view(-1, 1), min_prob.view(-1, 1))
@@ -336,13 +358,15 @@ def calc_margin(logits, y):
     return te_margin
 
 
-def save_checkpoint(state, is_best, best_accuracy, filename='./checkpoints/baseline.pth.tar'):
+def save_checkpoint(state, is_best, best_accuracy, filename='model.pth.tar', dirname='./chkpts'):
     """Save checkpoint if a new best is achieved"""
     if is_best:
+        try:
+            os.makedirs(dirname)
+        except OSError:
+            pass
         print ("=> Saving a new best, best_valid_acc: {}".format(best_accuracy))
-        torch.save(state, filename)  # save checkpoint
-#     else:
-#         print ("=> Validation Accuracy did not improve")
+        torch.save(state, os.path.join(dirname, filename))  # save checkpoint
 
 
 def scaled_dot_product(query, key, value, mask=None):
